@@ -4,6 +4,7 @@ Created on Mon Jul  9 16:18:13 2018
 
 @author: Pichau
 """
+import logging
 
 import numpy as np
 import torch
@@ -103,20 +104,20 @@ class PCIF(object):
 
         # fit estimator
         if isinstance(estimator, GridSearchCV) or isinstance(estimator, RandomizedSearchCV):
-            print("Running model selection...")
+            logging.info("Running model selection...")
             if estimator.refit == False:
                 estimator.refit = True
             estimator.fit(X, y)
-            print("Best score = {}".format(estimator.best_score_))
+            logging.info("Best score = {}".format(estimator.best_score_))
             self.cv_results_ = estimator.cv_results_
             self.estimator_ = estimator.best_estimator_
             self.best_score_ = estimator.best_score_
             self.best_params_ = estimator.best_params_
-            print("Done!")
+            logging.info("Done!")
         else:
-            print("Fitting estimator...")
+            logging.info("Fitting estimator...")
             self.estimator_ = estimator.fit(X, y)
-            print("Done!")
+            logging.info("Done!")
 
 
     def predict(self,
@@ -332,11 +333,11 @@ class uLSIF(object):
             # every point in train_data and every point in C,
             # element (l, i) should contain the squared l2-norm
             # between C[l] and train_data[i]
-            print("Computing distance matrix for train_dataain...")
+            logging.info("Computing distance matrix for train_dataain...")
             D_tr = pairwise_distances_squared(self.C_, train_data) # shape (t, n_tr)
 
             # do the same for test_data
-            print("Computing distance matrix for test_datast...")
+            logging.info("Computing distance matrix for test_datast...")
             D_te = pairwise_distances_squared(self.C_, test_data) # shape (t, n_te)
 
             # check if we need to run a hyperparameter search
@@ -345,7 +346,7 @@ class uLSIF(object):
             search_lam = isinstance(lam, (collections.Sequence, np.ndarray)) and \
                             (len(lam) > 1)
             if search_sigma | search_lam:
-                print("Running hyperparameter search...")
+                logging.info("Running hyperparameter search...")
                 sigma, lam = self.loocv(train_data, D_tr, test_data, D_te, sigma, lam)
             else:
                 if isinstance(sigma, (collections.Sequence, np.ndarray)):
@@ -353,14 +354,14 @@ class uLSIF(object):
                 if isinstance(lam, (collections.Sequence, np.ndarray)):
                     lam = lam[0]
 
-            print("Computing optimal solution...")
+            logging.info("Computing optimal solution...")
             train_data = gaussian_kernel(D_tr, sigma)  # shape (t, n_tr)
             test_data = gaussian_kernel(D_te, sigma) # shape (t, n_te)
             H, h = self.kernel_arrays(train_data, test_data) # shapes (t, t) and (t, 1)
             alpha = (H + (lam * torch.eye(t)).to(DEVICE)).inverse().mm(h) # shape (t, 1)
             self.alpha_ = torch.max(torch.zeros(1).to(DEVICE), alpha) # shape (t, 1)
             self.sigma_ = sigma
-            print("Done!")
+            logging.info("Done!")
 
 
     def predict(self,
@@ -524,13 +525,13 @@ class uLSIF(object):
                     loss_1 = ((train_data * B_2).t().mm(ones_t).pow(2).sum() / (2 * n)).item()
                     loss_2 = (ones_t.t().mm(test_data * B_2).mm(ones_n) / n).item()
                     losses[sigma_idx, lam_idx] = loss_1 - loss_2
-                    print("sigma = {:0.5f}, lambda = {:0.5f}, loss = {:0.5f}".format(
+                    logging.info("sigma = {:0.5f}, lambda = {:0.5f}, loss = {:0.5f}".format(
                             sigma, lam, losses[sigma_idx, lam_idx]))
 
             # get best hyperparameters
             sigma_idx, lam_idx = np.unravel_index(np.argmin(losses), losses.shape)
             sigma_hat, lam_hat = sigma_range[sigma_idx], lam_range[lam_idx]
-            print("\nbest loss = {:0.5f} for sigma = {:0.5f} and lambda = {:0.5f}".format(
+            logging.info("\nbest loss = {:0.5f} for sigma = {:0.5f} and lambda = {:0.5f}".format(
                     losses[sigma_idx, lam_idx], sigma_hat, lam_hat))
 
         return sigma_hat, lam_hat
