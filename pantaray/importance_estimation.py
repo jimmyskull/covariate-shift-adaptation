@@ -63,10 +63,7 @@ class PCIF(object):
         self.best_params_ = None
 
 
-    def fit(self,
-            estimator,
-            X_tr,
-            X_te):
+    def fit(self, train_data, test_data, estimator=None):
         """
         Fits a probabilistic classifier to the input training and test data
         to predict p(test|x).
@@ -81,24 +78,25 @@ class PCIF(object):
         Parameters
         ----------
 
+        train_data: numpy array
+            Input data from training distribution, where each row is a feature vector.
+
+        test_data: numpy array
+            Input data from test distribution, where each row is a feature vector.
+
         estimator: estimator or sklearn.model_selection.GridSearchCV/RandomizedSearchCV
             If estimator, assumed to implement the scikit-learn estimator interface.
 
-        X_tr: numpy array
-            Input data from training distribution, where each row is a feature vector.
-
-        X_te: numpy array
-            Input data from test distribution, where each row is a feature vector.
         """
 
         # construct the target (1 if test, 0 if train)
-        self.n_tr_ = X_tr.shape[0]
-        self.n_te_ = X_te.shape[0]
+        self.n_tr_ = train_data.shape[0]
+        self.n_te_ = test_data.shape[0]
         n = self.n_tr_ + self.n_te_
         y = np.concatenate((np.zeros(self.n_tr_), np.ones(self.n_te_)))
 
         # stack and shuffle features and target
-        X = np.vstack((X_tr, X_te))
+        X = np.vstack((train_data, test_data))
         i_shuffle = np.random.choice(n, n, replace=False)
         X = X[i_shuffle]
         y = y[i_shuffle]
@@ -160,19 +158,19 @@ class PCIF(object):
 
     def fit_predict(self,
                     estimator,
-                    X_tr,
-                    X_te,
+                    train_data,
+                    test_data,
                     X):
 
-        self.fit(estimator, X_tr, X_te)
+        self.fit(estimator, train_data, test_data)
         w = self.predict(X)
 
         return w
 
 
     def predict_oos(self,
-                    X_tr,
-                    X_te,
+                    train_data,
+                    test_data,
                     estimator=None,
                     n_splits=5):
 
@@ -181,26 +179,26 @@ class PCIF(object):
             estimator = deepcopy(self.estimator_)
 
         # stack features and construct the target (1 if test, 0 if train)
-        X = np.vstack((X_tr, X_te))
-        y = np.concatenate((np.zeros(X_tr.shape[0]), np.ones(X_te.shape[0])))
+        X = np.vstack((train_data, test_data))
+        y = np.concatenate((np.zeros(train_data.shape[0]), np.ones(test_data.shape[0])))
 
         # split the data into n_splits folds, and for 1 to n_splits,
         # train on (n_splits - 1)-folds and use the fitted estimator to
         # predict weights for the other fold
         w = np.zeros_like(y)
         skf = StratifiedKFold(n_splits=n_splits, shuffle=True)
-        for idx_tr, idx_te in skf.split(X, y):
+        for idtrain_data, idtest_data in skf.split(X, y):
 
             # fit on (n_splits - 1)-folds
-            estimator.fit(X[idx_tr], y[idx_tr])
+            estimator.fit(X[idtrain_data], y[idtrain_data])
 
             # predict probabilities for other fold
-            p = estimator.predict_proba(X[idx_te])
+            p = estimator.predict_proba(X[idtest_data])
 
             # predict weights for other fold
-            n_tr = (y[idx_tr] == 0).sum()
-            n_te = (y[idx_tr] == 1).sum()
-            w[idx_te] = importance_weights(p, n_tr, n_te)
+            n_tr = (y[idtrain_data] == 0).sum()
+            n_te = (y[idtrain_data] == 1).sum()
+            w[idtest_data] = importance_weights(p, n_tr, n_te)
 
         # split into training and test weights
         w_tr = w[y == 0]
@@ -279,8 +277,8 @@ class uLSIF(object):
 
 
     def fit(self,
-            X_tr,
-            X_te,
+            train_data,
+            test_data,
             sigma,
             lam,
             random_seed=42):
@@ -301,10 +299,10 @@ class uLSIF(object):
         Parameters
         ----------
 
-        X_tr: numpy array
+        train_data: numpy array
             Input data from training distribution, where each row is a feature vector.
 
-        X_te: numpy array
+        test_data: numpy array
             Input data from test distribution, where each row is a feature vector.
 
         sigma: scalar or iterable
@@ -322,24 +320,24 @@ class uLSIF(object):
             np.random.seed(random_seed)
 
             # convert training and test data to torch tensors
-            X_tr = torch.from_numpy(X_tr).float().to(DEVICE)
-            X_te = torch.from_numpy(X_te).float().to(DEVICE)
+            train_data = torch.from_numpy(train_data).float().to(DEVICE)
+            test_data = torch.from_numpy(test_data).float().to(DEVICE)
 
-            # randomly choose kernel centres from X_te without replacement
-            n_te = X_te.size(0)
-            t = min(self.n_kernels, X_te.size(0))
-            self.C_ = X_te[np.random.choice(n_te, t, replace=False)] # shape (t, d)
+            # randomly choose kernel centres from test_data without replacement
+            n_te = test_data.size(0)
+            t = min(self.n_kernels, test_data.size(0))
+            self.C_ = test_data[np.random.choice(n_te, t, replace=False)] # shape (t, d)
 
             # compute the squared l2-norm of the difference between
-            # every point in X_tr and every point in C,
+            # every point in train_data and every point in C,
             # element (l, i) should contain the squared l2-norm
-            # between C[l] and X_tr[i]
-            print("Computing distance matrix for X_train...")
-            D_tr = pairwise_distances_squared(self.C_, X_tr) # shape (t, n_tr)
+            # between C[l] and train_data[i]
+            print("Computing distance matrix for train_dataain...")
+            D_tr = pairwise_distances_squared(self.C_, train_data) # shape (t, n_tr)
 
-            # do the same for X_te
-            print("Computing distance matrix for X_test...")
-            D_te = pairwise_distances_squared(self.C_, X_te) # shape (t, n_te)
+            # do the same for test_data
+            print("Computing distance matrix for test_datast...")
+            D_te = pairwise_distances_squared(self.C_, test_data) # shape (t, n_te)
 
             # check if we need to run a hyperparameter search
             search_sigma = isinstance(sigma, (collections.Sequence, np.ndarray)) and \
@@ -348,7 +346,7 @@ class uLSIF(object):
                             (len(lam) > 1)
             if search_sigma | search_lam:
                 print("Running hyperparameter search...")
-                sigma, lam = self.loocv(X_tr, D_tr, X_te, D_te, sigma, lam)
+                sigma, lam = self.loocv(train_data, D_tr, test_data, D_te, sigma, lam)
             else:
                 if isinstance(sigma, (collections.Sequence, np.ndarray)):
                     sigma = sigma[0]
@@ -356,9 +354,9 @@ class uLSIF(object):
                     lam = lam[0]
 
             print("Computing optimal solution...")
-            X_tr = gaussian_kernel(D_tr, sigma)  # shape (t, n_tr)
-            X_te = gaussian_kernel(D_te, sigma) # shape (t, n_te)
-            H, h = self.kernel_arrays(X_tr, X_te) # shapes (t, t) and (t, 1)
+            train_data = gaussian_kernel(D_tr, sigma)  # shape (t, n_tr)
+            test_data = gaussian_kernel(D_te, sigma) # shape (t, n_te)
+            H, h = self.kernel_arrays(train_data, test_data) # shapes (t, t) and (t, 1)
             alpha = (H + (lam * torch.eye(t)).to(DEVICE)).inverse().mm(h) # shape (t, 1)
             self.alpha_ = torch.max(torch.zeros(1).to(DEVICE), alpha) # shape (t, 1)
             self.sigma_ = sigma
@@ -415,9 +413,9 @@ class uLSIF(object):
 
 
     def loocv(self,
-              X_tr,
+              train_data,
               D_tr,
-              X_te,
+              test_data,
               D_te,
               sigma_range,
               lam_range):
@@ -431,23 +429,23 @@ class uLSIF(object):
         Parameters
         ----------
 
-        X_tr: torch tensor
+        train_data: torch tensor
             Input data from training distribution, where each row is a feature vector.
 
         D_tr: torch tensor
             Squared l2-norm of the difference between every kernel centre
-            and every row in X_tr.
+            and every row in train_data.
             Element (l, i) should contain the squared l2-norm between
-            the l-th kernel centre and X_tr[i]
+            the l-th kernel centre and train_data[i]
 
-        X_te: torch tensor
+        test_data: torch tensor
             Input data from test distribution, where each row is a feature vector.
 
         D_te: torch tensor
             Squared l2-norm of the difference between every kernel centre
-            and every point in X_te.
+            and every point in test_data.
             Element (l, i) should contain the squared l2-norm between
-            the l-th kernel centre and X_te[i]
+            the l-th kernel centre and test_data[i]
 
         sigma_range: scalar or iterable
             Guassian kernel width. If scalar will be converted to list.
@@ -474,8 +472,8 @@ class uLSIF(object):
                 lam_range = [lam_range]
 
             # define some useful variables
-            n_tr, d = X_tr.size()
-            n_te = X_te.size(0)
+            n_tr, d = train_data.size()
+            n_te = test_data.size(0)
             n = min(n_tr, n_te)
             t = min(self.n_kernels, n_te)
             ones_t = torch.ones((t, 1), device=DEVICE)
@@ -487,17 +485,17 @@ class uLSIF(object):
             for sigma_idx, sigma in enumerate(sigma_range):
 
                 # apply the Gaussian kernel function to the elements of D_tr and D_te
-                # reuse variables X_tr and X_te as we won't need the originals again
-                X_tr = gaussian_kernel(D_tr, sigma) # shape (t, n_tr)
-                X_te = gaussian_kernel(D_te, sigma)  # shape (t, n_te)
+                # reuse variables train_data and test_data as we won't need the originals again
+                train_data = gaussian_kernel(D_tr, sigma) # shape (t, n_tr)
+                test_data = gaussian_kernel(D_te, sigma)  # shape (t, n_te)
 
                 # compute kernel arrays
-                H, h = self.kernel_arrays(X_tr, X_te) # shapes (t, t) and (t, 1)
+                H, h = self.kernel_arrays(train_data, test_data) # shapes (t, t) and (t, 1)
 
-                # for what follows X_tr and X_te must have the same shape,
+                # for what follows train_data and test_data must have the same shape,
                 # so choose n points randomly from each
-                X_tr = X_tr[:, np.random.choice(n_tr, n, replace=False)] # shape (t, n)
-                X_te = X_te[:, np.random.choice(n_te, n, replace=False)] # shape (t, n)
+                train_data = train_data[:, np.random.choice(n_tr, n, replace=False)] # shape (t, n)
+                test_data = test_data[:, np.random.choice(n_te, n, replace=False)] # shape (t, n)
 
                 # for each candidate of regularisation parameter...
                 for lam_idx, lam in enumerate(lam_range):
@@ -507,24 +505,24 @@ class uLSIF(object):
 
                     # compute the t x n matrix B_0
                     B_inv = B.inverse() # shape (t, t)
-                    B_inv_X_tr = B_inv.mm(X_tr) # shape (t, n)
-                    diag_num = h.t().mm(B_inv_X_tr).squeeze() # shape (n,)
-                    diag_denom = (n_tr * ones_n.t() - ones_t.t().mm(X_tr * B_inv_X_tr)).squeeze() # shape (n,)
+                    B_inv_train_data = B_inv.mm(train_data) # shape (t, n)
+                    diag_num = h.t().mm(B_inv_train_data).squeeze() # shape (n,)
+                    diag_denom = (n_tr * ones_n.t() - ones_t.t().mm(train_data * B_inv_train_data)).squeeze() # shape (n,)
                     diag_sparse = torch.sparse.FloatTensor(diag_n_idx, (diag_num / diag_denom).cpu(), torch.Size([n, n])).to(DEVICE) # sparse (n, n)
-                    B_0 = B_inv.mm(h).mm(ones_n.t()) + (diag_sparse.t().mm(B_inv_X_tr.t())).t() # shape (t, n)
+                    B_0 = B_inv.mm(h).mm(ones_n.t()) + (diag_sparse.t().mm(B_inv_train_data.t())).t() # shape (t, n)
 
                     # compute B_1
-                    diag_num = ones_t.t().mm(X_te * B_inv_X_tr).squeeze() # shape (n,)
+                    diag_num = ones_t.t().mm(test_data * B_inv_train_data).squeeze() # shape (n,)
                     diag_sparse = torch.sparse.FloatTensor(diag_n_idx, (diag_num / diag_denom).cpu(), torch.Size([n, n])).to(DEVICE) # sparse (n, n)
-                    B_1 = B_inv.mm(X_te) + (diag_sparse.t().mm(B_inv_X_tr.t())).t() # shape (t, n)
+                    B_1 = B_inv.mm(test_data) + (diag_sparse.t().mm(B_inv_train_data.t())).t() # shape (t, n)
 
                     # compute B_2
                     B_2 = ((n_tr - 1) / (n_tr * (n_te - 1))) * (n_te * B_0 - B_1) # shape (t, n)
                     B_2 = torch.max(torch.zeros(1).to(DEVICE), B_2) # shape (t, n)
 
                     # compute leave-one-out CV loss
-                    loss_1 = ((X_tr * B_2).t().mm(ones_t).pow(2).sum() / (2 * n)).item()
-                    loss_2 = (ones_t.t().mm(X_te * B_2).mm(ones_n) / n).item()
+                    loss_1 = ((train_data * B_2).t().mm(ones_t).pow(2).sum() / (2 * n)).item()
+                    loss_2 = (ones_t.t().mm(test_data * B_2).mm(ones_n) / n).item()
                     losses[sigma_idx, lam_idx] = loss_1 - loss_2
                     print("sigma = {:0.5f}, lambda = {:0.5f}, loss = {:0.5f}".format(
                             sigma, lam, losses[sigma_idx, lam_idx]))
@@ -539,8 +537,8 @@ class uLSIF(object):
 
 
     def kernel_arrays(self,
-                      X_tr,
-                      X_te):
+                      train_data,
+                      test_data):
         """
         Computes kernel matrix H and vector h from algorithm.
 
@@ -563,15 +561,15 @@ class uLSIF(object):
         Parameters
         ----------
 
-        X_tr: torch tensor
-            X_tr[l, i] is equal to the Gaussian kernel of the squared l2-norm
+        train_data: torch tensor
+            train_data[l, i] is equal to the Gaussian kernel of the squared l2-norm
             of the difference between the l-th kernel centre and the
             i-th sample from the training distribution:
 
                 exp(-(||x_i - c_l|| ^ 2) / (2 * (sigma ^ 2))).
 
-        X_te: torch tensor
-            X_te[l, i] is equal to the Gaussian kernel of the squared l2-norm
+        test_data: torch tensor
+            test_data[l, i] is equal to the Gaussian kernel of the squared l2-norm
             of the difference between the l-th kernel centre and the
             i-th sample from the test distribution:
 
@@ -581,20 +579,20 @@ class uLSIF(object):
         -------
 
         H: torch tensor
-            H[l, l'] is equal to the sum over i=1:X_tr.size(1)
-            of X_tr[l, i] * X_tr[l', i] / X_tr.size(1)
+            H[l, l'] is equal to the sum over i=1:train_data.size(1)
+            of train_data[l, i] * train_data[l', i] / train_data.size(1)
 
         h: torch tensor
-            h[l] is equal to the sum over i=1:X_te.size(1)
-            of X_te[l, i] / X_te.size(1)
+            h[l] is equal to the sum over i=1:test_data.size(1)
+            of test_data[l, i] / test_data.size(1)
         """
 
         # compute H
-        n_tr = X_tr.size(1)
-        H = X_tr.mm(X_tr.t()) / n_tr # shape (t, t)
+        n_tr = train_data.size(1)
+        H = train_data.mm(train_data.t()) / n_tr # shape (t, t)
 
         # compute h
-        n_te = X_te.size(1)
-        h = X_te.sum(dim=1, keepdim=True) / n_te # shape (t, 1)
+        n_te = test_data.size(1)
+        h = test_data.sum(dim=1, keepdim=True) / n_te # shape (t, 1)
 
         return H, h
