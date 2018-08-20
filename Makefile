@@ -4,7 +4,7 @@
 # You can set these variables from the command line.
 SPHINXOPTS    =
 SPHINXBUILD   = sphinx-build
-SPHINXPROJ    = covariate_shift_adaption
+SPHINXPROJ    = pantaray
 SOURCEDIR     = source
 BUILDDIR      = build
 
