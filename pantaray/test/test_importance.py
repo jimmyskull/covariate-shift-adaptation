@@ -5,6 +5,7 @@ from numpy.random import shuffle
 
 from sklearn.datasets import load_digits
 from sklearn.linear_model import LogisticRegression
+from sklearn.exceptions import NotFittedError
 
 from pantaray.importance_estimation import PCIF
 
@@ -29,8 +30,14 @@ class ImportanceTest(unittest.TestCase):
     def test_something(self):
         X_train, X_test = self.X_train, self.X_test
         pcif = PCIF()
-        pcif.fit(LogisticRegression(), X_train, X_test)
+        pcif.fit(X_train, X_test, LogisticRegression())
         w_train = pcif.predict(X_train)
         w_test = pcif.predict(X_test)
         print(w_train.mean())
         print(w_test.mean())
+
+    def test_error_predict_without_fit(self):
+        X_train, X_test = self.X_train, self.X_test
+        pcif = PCIF()
+        with self.assertRaises(NotFittedError):
+            w_train = pcif.predict(X_train)

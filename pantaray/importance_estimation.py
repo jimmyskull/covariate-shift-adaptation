@@ -11,7 +11,11 @@ from copy import deepcopy
 
 import numpy as np
 import torch
-from sklearn.model_selection import (BaseSearchCV, StratifiedKFold)
+from sklearn.model_selection._search import BaseSearchCV
+from sklearn.model_selection import StratifiedKFold
+from sklearn.base import BaseEstimator, ClassifierMixin
+from sklearn.utils.validation import check_is_fitted
+
 
 from .torch_utils import pairwise_distances_squared, gaussian_kernel
 
@@ -19,7 +23,7 @@ from .torch_utils import pairwise_distances_squared, gaussian_kernel
 DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
-class PCIF(object):
+class PCIF(BaseEstimator, ClassifierMixin):
     r"""
     Probabilistic Classifier Importance Fitting.
 
@@ -57,15 +61,6 @@ class PCIF(object):
 
     best_params_ :
     """
-
-    def __init__(self):
-        self.n_train_ = None
-        self.n_test_ = None
-        self.estimator_ = None
-        self.cv_results_ = None
-        self.best_score_ = None
-        self.best_params_ = None
-
 
     def fit(self, train_data, test_data, estimator=None):
         """
@@ -156,7 +151,7 @@ class PCIF(object):
             Estimated importance weight for each input.
             w[i] corresponds to importance weight of X[i]
         """
-        assert self.estimator_ is not None, "Need to run fit method before calling predict!"
+        check_is_fitted(self, 'estimator_')
         p = self.estimator_.predict_proba(X)
         w = importance_weights(p, self.n_train_, self.n_test_)
         return w
