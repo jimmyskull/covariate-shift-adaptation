@@ -206,7 +206,7 @@ def importance_weights(p, n_train, n_test, logits=False):
     return w
 
 
-class uLSIF(object):
+class uLSIF(BaseEstimator, ClassifierMixin):
     r"""
     Unconstrained Least Squares Importance Fitting (uLSIF).
 
