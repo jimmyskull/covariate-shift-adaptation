@@ -1,8 +1,5 @@
-# -*- coding: utf-8 -*-
 """
-Created on Mon Jul  9 16:18:13 2018
-
-@author: Pichau
+Importance Estimation methods.
 """
 import logging
 import collections
