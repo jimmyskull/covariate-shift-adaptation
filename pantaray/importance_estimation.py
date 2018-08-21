@@ -11,8 +11,7 @@ from copy import deepcopy
 
 import numpy as np
 import torch
-from sklearn.model_selection import (GridSearchCV, RandomizedSearchCV,
-                                     StratifiedKFold)
+from sklearn.model_selection import (BaseSearchCV, StratifiedKFold)
 
 from .torch_utils import pairwise_distances_squared, gaussian_kernel
 
@@ -78,8 +77,8 @@ class PCIF(object):
         - If an estimator with the scikit-learn interface is provided,
         this estimator is fit to the data.
 
-        - If scikit-learn :class:`sklearn.model_selection.GridSearchCV`
-          or :class:`sklearn.model_selection.RandomizedSearchCV` object
+        - If an object that inherits
+          :class:`sklearn.model_selection.BaseSearchCV` is
           provided, model selection is run and the best estimator is
           subsequently fit to all the data.
 
@@ -110,7 +109,7 @@ class PCIF(object):
         y = y[i_shuffle]
 
         # Fit estimator.
-        if isinstance(estimator, (GridSearchCV, RandomizedSearchCV)):
+        if isinstance(estimator, BaseSearchCV):
             logging.info('Running model selection...')
             if estimator.refit == False:
                 estimator.refit = True
