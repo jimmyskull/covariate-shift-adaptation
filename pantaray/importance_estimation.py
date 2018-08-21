@@ -160,12 +160,16 @@ class PCIF(BaseEstimator, ClassifierMixin):
 
     def predict_oos(self, train_data, test_data, estimator=None, n_splits=5):
         if estimator is None:
-            assert self.estimator_ is not None, "Either provide an estimator or run fit method first!"
+            check_is_fitted(
+                self,
+                'estimator_',
+                msg='Either provide an estimator or run fit method first!')
             estimator = deepcopy(self.estimator_)
 
         # stack features and construct the target (1 if test, 0 if train)
         X = np.vstack((train_data, test_data))
-        y = np.concatenate((np.zeros(train_data.shape[0]), np.ones(test_data.shape[0])))
+        y = np.concatenate((np.zeros(train_data.shape[0]),
+                            np.ones(test_data.shape[0])))
 
         # split the data into n_splits folds, and for 1 to n_splits,
         # train on (n_splits - 1)-folds and use the fitted estimator to
@@ -512,14 +516,18 @@ class uLSIF(object):
                     loss_1 = ((train_data * B_2).t().mm(ones_t).pow(2).sum() / (2 * n)).item()
                     loss_2 = (ones_t.t().mm(test_data * B_2).mm(ones_n) / n).item()
                     losses[sigma_idx, lam_idx] = loss_1 - loss_2
-                    logging.info('sigma = {:0.5f}, lambda = {:0.5f}, loss = {:0.5f}'.format(
-                            sigma, lam, losses[sigma_idx, lam_idx]))
+                    logging.info(
+                        f'sigma = {sigma:0.5f}, '
+                        f'lambda = {lam:0.5f}, '
+                        f'loss = {losses[sigma_idx, lam_idx]:0.5f}')
 
             # get best hyperparameters
             sigma_idx, lam_idx = np.unravel_index(np.argmin(losses), losses.shape)
             sigma_hat, lam_hat = sigma_range[sigma_idx], lam_range[lam_idx]
-            logging.info('\nbest loss = {:0.5f} for sigma = {:0.5f} and lambda = {:0.5f}'.format(
-                    losses[sigma_idx, lam_idx], sigma_hat, lam_hat))
+            logging.info(
+                f'\nbest loss = {losses[sigma_idx, lam_idx]:0.5f} for '
+                f'sigma = {sigma_hat:0.5f} and '
+                f'lambda = {lam_hat:0.5f}')
 
         return sigma_hat, lam_hat
 
