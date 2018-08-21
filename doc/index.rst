@@ -1,21 +1,21 @@
-.. covariate_shift_adaption documentation master file, created by
+.. pantaray documentation master file, created by
    sphinx-quickstart on Sun Jul 29 12:41:42 2018.
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Welcome to covariate_shift_adaption's documentation!
-====================================================
+Welcome to pantaray's documentation!
+====================================
 
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
 
-.. automodule:: covariate_shift_adaption
+.. automodule:: pantaray
     :members:
 
-.. autoclass:: PCIF
+.. autoclass:: importance_estimation.PCIF
 
-.. autoclass:: uLSIF
+.. autoclass:: importance_estimation.uLSIF
 
 Indices and tables
 ==================
